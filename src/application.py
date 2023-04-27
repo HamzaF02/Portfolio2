@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 def client():
     clientSocket = socket(AF_INET, SOCK_DGRAM)
-    port = 8080
+    port = 8088
     ip = "127.0.0.1"
     try:
         clientSocket.connect((ip, port))
@@ -26,35 +26,46 @@ def client():
     clientSocket.send(name.encode())
 
     f = open(name, "rb").read()
+    f = str(f).split()
+    print(f[0].encode())
+    for i in range(0, len(f)):
+        clientSocket.send(bytes(f[i]))
 
-    for i in f:
-        clientSocket.send(i.encode())
+    # clientSocket.send("done".encode())
+
+    clientSocket.close()
 
 
 def server():
     serverSocket = socket(AF_INET, SOCK_DGRAM)
-    port = 8080
+    port = 8088
     # ip = "127.0.0.1"
 
     try:
-        serverSocket.bind(('', port))
+        serverSocket.bind(('127.0.0.1', port))
     except:
         print("ERROR: Binding failed")
         sys.exit()
 
     # serverSocket.listen(1)
 
-    startInfo, clientAddress = serverSocket.recvfrom(1024)
+    startInfo = serverSocket.recv(1024)
 
-    g = open("new"+startInfo.decode(), "wb")
+    g = open("new_"+startInfo.decode(), "wb")
     while True:
-        m, clientAddress = serverSocket.recvfrom(1024)
-        m = m.decode()
+        m = serverSocket.recv(4096)
+        g.write(m)
+        # m = m.decode()
 
-        if not m:
-            break
-        else:
-            g.write(m)
+        # if m[-4:] == "done":
+        #     # print(m[:-4])
+        #     g.write(m[:-4].encode())
+        #     break
+        # else:
+        #     # print(m)
+        #     g.write(m.encode())
+
+    serverSocket.close()
 
 
 if args.client:

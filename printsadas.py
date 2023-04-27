@@ -1,6 +1,10 @@
+f = open("src/x.png", 'rb').read()
+f = str(f).split()
 
-f = open("x.png", 'rb').read()
-print(f)
 
 g = open("new.png", "wb")
-g.write(f)
+m = b''
+for i in range(0, len(f)):
+    m += f[i].encode()
+print(m[3:-1])
+g.write(m[3:-1])
