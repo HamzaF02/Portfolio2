@@ -22,16 +22,18 @@ def client():
     except:
         print("Failed to connect")
         sys.exit()
+
     name = input("Filename: ")
     clientSocket.send(name.encode())
 
-    f = open(name, "rb").read()
-    f = str(f).split()
-    print(f[0].encode())
-    for i in range(0, len(f)):
-        clientSocket.send(bytes(f[i]))
+    f = open(name, "rb")
 
-    # clientSocket.send("done".encode())
+    packet = f.read(1024)
+    while packet:
+        clientSocket.send(packet)
+        packet = f.read(1024)
+
+    clientSocket.send("end".encode())
 
     clientSocket.close()
 
@@ -39,31 +41,26 @@ def client():
 def server():
     serverSocket = socket(AF_INET, SOCK_DGRAM)
     port = 8088
-    # ip = "127.0.0.1"
+    ip = "127.0.0.1"
 
     try:
-        serverSocket.bind(('127.0.0.1', port))
+        serverSocket.bind((ip, port))
     except:
         print("ERROR: Binding failed")
         sys.exit()
 
-    # serverSocket.listen(1)
-
     startInfo = serverSocket.recv(1024)
+
+    meld = b''
 
     g = open("new_"+startInfo.decode(), "wb")
     while True:
-        m = serverSocket.recv(4096)
-        g.write(m)
-        # m = m.decode()
+        m = serverSocket.recv(1024)
+        if m == b'end':
+            break
+        meld += m
 
-        # if m[-4:] == "done":
-        #     # print(m[:-4])
-        #     g.write(m[:-4].encode())
-        #     break
-        # else:
-        #     # print(m)
-        #     g.write(m.encode())
+    g.write(meld)
 
     serverSocket.close()
 
