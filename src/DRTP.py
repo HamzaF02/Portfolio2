@@ -1,5 +1,6 @@
 from struct import *
 from socket import *
+import time
 
 
 class DRTP:
@@ -32,5 +33,20 @@ class DRTP:
         fin = flags & (1 << 1)
         return syn, ack, fin
 
-    def client(self, data):
-        self.socket.connect
+    def connect(self, data):
+        self.socket.connect((self.ip, self.port))
+        self.socket.send(
+            self.create_packet(self.seq, 0, 8, 0, 0, '')
+        )
+
+        time = time.time()
+
+        while
+        seq, ack, flags, win = self.recv()
+
+        if (seq != self.seq)
+
+    def recv(self):
+        msg = self.socket.recv(1024)
+        seq, ack, flags, win = self.parse_header(msg[:12])
+        return seq, ack, flags, win
