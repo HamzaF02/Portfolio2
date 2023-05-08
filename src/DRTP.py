@@ -1,5 +1,6 @@
 from struct import *
 from socket import *
+import sys
 import time
 
 
@@ -30,20 +31,81 @@ class DRTP:
 
     def connect(self):
         self.socket.connect((self.ip, self.port))
+
+        sync = self.create_packet(self.seq, 0, 8, 0, 0, '')
+
         start_time = time.time()
-        self.stop_and_wait(
-            self.create_packet(self.seq, 0, 8, 0, 0, '')
-        )
+        self.socket.send(sync)
+        ret = self.socket.recv(1024)
         end_time = time.time()
 
-        self.socket.recv()
+        if ret is None:
+            print("ERROR. Synchronize acknowledgment not received")
+            self.socket.close()
+            sys.exit()
 
-        seq, ack, flags, win = self.recv()
+        header = ret[:12]
 
-    # def recv(self):
-    #     msg = self.socket.recv(1024)
-    #     seq, ack, flags, win = self.parse_header(msg[:12])
-    #     return seq, ack, flags, win
+        seq, ack, flags, win = self.parse_header[header]
+        syn, ackflag, fin = self.parse_flags(flags)
+        if syn != 1 or ackflag != 1 or ack != self.seq:
+            print("ERROR. Synchronize acknowledgment not received")
+            self.socket.close()
+            sys.exit()
+        end_time = time.time()
+
+        self.socket.timeout(end_time-start_time*4000)
+
+        self.socket.send(self.create_packet(0, 1, 4, 0, 0, ''))
+        self.seq += 1
+
+    def bind(self):
+        self.socket.bind((self.ip, self.port))
+
+        sync = self.socket.recv(1024)
+        header = sync[:12]
+
+        seq, ack, flags, win = self.parse_header[header]
+        syn, ackflag, fin = self.parse_flags(flags)
+
+        if syn != 1:
+            print("ERROR. Synchronize not received")
+            self.socket.close()
+            sys.exit()
+
+        sync = self.create_packet(self.seq, 0, 12, 0, 0, '')
+
+        start_time = time.time()
+        self.socket.send(sync)
+        ret = self.socket.recv(1024)
+        end_time = time.time()
+
+        header = ret[:12]
+
+        seq, ack, flags, win = self.parse_header[header]
+        syn, ackflag, fin = self.parse_flags(flags)
+
+        if self.seq != ack or ackflag == 0:
+            print("ERROR. Acknowledgement of Acknowledgement of Synchronize not received")
+            self.socket.close()
+            sys.exit()
+
+    def close(self):
+        fin = self.create_packet(self.seq, 0, 2, 0, 0, '')
+
+        self.socket.send(fin)
+        ret = self.socket.recv(1024)
+
+        header = ret[:12]
+
+        seq, ack, flags, win = self.parse_header[header]
+        syn, ackflag, fin = self.parse_flags(flags)
+
+        if self.seq != ack or ackflag == 0:
+            print("ERROR. Acknowledgement of fin not received")
+            self.socket.close()
+            sys.exit()
+        self.socket.close()
 
     def stop_and_wait_sender(self, data):
         self.socket.send(data)
@@ -55,12 +117,12 @@ class DRTP:
             self.stop_and_wait_sender(data)
             return
 
-        msg = ret[12:]
         header = ret[:12]
 
         seq, ack, flags, win = self.parse_header[header]
+        syn, ackflag, fin = self.parse_flags(flags)
 
-        if self.seq != ack:
+        if self.seq != ack or ackflag == 0:
             self.stop_and_wait_sender(data)
 
         self.seq += 1
@@ -80,3 +142,6 @@ class DRTP:
         if (self.seq == seq):
             self.seq += 1
             return msg
+
+        if self.parse_flags(flags)[2] == 1:
+            self.socket.close()
