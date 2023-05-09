@@ -11,8 +11,7 @@ class DRTP:
         self.header_format = '!IIHH'
         self.seq = 1
         self.socket = socket(AF_INET, SOCK_DGRAM)
-        self.timeout = 500
-        self.socket.settimeout(self.timeout)
+        self.timeout = 0.5
 
     def create_packet(self, seq, ack, flags, win, data):
         header = pack(self.header_format, seq, ack, flags, win)
@@ -23,20 +22,20 @@ class DRTP:
         header_from_msg = unpack(self.header_format, header)
         return header_from_msg
 
-    def parse_flags(flags):
+    def parse_flags(self, flags):
         syn = flags & (1 << 3)
         ack = flags & (1 << 2)
         fin = flags & (1 << 1)
         return syn, ack, fin
 
     def connect(self):
-        self.socket.connect((self.ip, self.port))
+        server = (self.ip, self.port)
 
-        sync = self.create_packet(self.seq, 0, 8, 0, 0, '')
+        sync = self.create_packet(self.seq, 0, 8, 0, b'')
 
         start_time = time.time()
-        self.socket.send(sync)
-        ret = self.socket.recv(1024)
+        self.socket.sendto(sync, (self.ip, self.port))
+        ret = self.socket.recv(2048)
         end_time = time.time()
 
         if ret is None:
@@ -46,102 +45,115 @@ class DRTP:
 
         header = ret[:12]
 
-        seq, ack, flags, win = self.parse_header[header]
+        seq, ack, flags, win = self.parse_header(header)
         syn, ackflag, fin = self.parse_flags(flags)
-        if syn != 1 or ackflag != 1 or ack != self.seq:
+        if syn == 0 or ackflag == 0 or seq != self.seq:
             print("ERROR. Synchronize acknowledgment not received")
             self.socket.close()
             sys.exit()
         end_time = time.time()
 
-        self.socket.timeout(end_time-start_time*4000)
+        self.timeout = int((end_time-start_time)*4)
+        # self.socket.settimeout(self.timeout)
 
-        self.socket.send(self.create_packet(0, 1, 4, 0, 0, ''))
+        self.socket.sendto(self.create_packet(
+            0, 1, 4, 0, b''), (self.ip, self.port))
         self.seq += 1
 
     def bind(self):
-        self.socket.bind((self.ip, self.port))
+        try:
+            self.socket.bind((self.ip, self.port))
+        except:
+            sys.exit()
 
-        sync = self.socket.recv(1024)
+        sync, self.client = self.socket.recvfrom(2048)
         header = sync[:12]
 
-        seq, ack, flags, win = self.parse_header[header]
+        seq, ack, flags, win = self.parse_header(header)
         syn, ackflag, fin = self.parse_flags(flags)
 
-        if syn != 1:
+        if syn == 0:
             print("ERROR. Synchronize not received")
             self.socket.close()
             sys.exit()
 
-        sync = self.create_packet(self.seq, 0, 12, 0, 0, '')
+        sync = self.create_packet(self.seq, 0, 12, 0, b'')
 
-        start_time = time.time()
-        self.socket.send(sync)
+        self.socket.sendto(sync, self.client)
         ret = self.socket.recv(1024)
-        end_time = time.time()
 
         header = ret[:12]
 
-        seq, ack, flags, win = self.parse_header[header]
+        seq, ack, flags, win = self.parse_header(header)
         syn, ackflag, fin = self.parse_flags(flags)
 
         if self.seq != ack or ackflag == 0:
             print("ERROR. Acknowledgement of Acknowledgement of Synchronize not received")
             self.socket.close()
             sys.exit()
+        self.seq += 1
 
     def close(self):
-        fin = self.create_packet(self.seq, 0, 2, 0, 0, '')
 
-        self.socket.send(fin)
-        ret = self.socket.recv(1024)
+        while True:
+            fin = self.create_packet(self.seq, 0, 2, 0, b'')
 
-        header = ret[:12]
+            self.socket.sendto(fin, (self.ip, self.port))
 
-        seq, ack, flags, win = self.parse_header[header]
-        syn, ackflag, fin = self.parse_flags(flags)
+            ret = self.socket.recv(2048)
 
-        if self.seq != ack or ackflag == 0:
-            print("ERROR. Acknowledgement of fin not received")
-            self.socket.close()
-            sys.exit()
+            if ret is None:
+                continue
+
+            header = ret[:12]
+
+            seq, ack, flags, win = self.parse_header(header)
+            syn, ackflag, fin = self.parse_flags(flags)
+
+            if self.seq == ack or ackflag != 0:
+                break
+
         self.socket.close()
 
     def stop_and_wait_sender(self, data):
-        self.socket.send(data)
-        ret = self.socket.recv(1024)
+        self.socket.sendto(self.create_packet(
+            self.seq, 0, 0, 0, data), (self.ip, self.port))
+        while True:
+            ret = self.socket.recv(2048)
 
-        ############# RESET TIMER!!! ##############
+            ############# RESET TIMER!!! ##############
 
-        if ret is None:
-            self.stop_and_wait_sender(data)
-            return
+            if ret is None:
+                continue
 
-        header = ret[:12]
+            header = ret[:12]
 
-        seq, ack, flags, win = self.parse_header[header]
-        syn, ackflag, fin = self.parse_flags(flags)
+            seq, ack, flags, win = self.parse_header(header)
+            syn, ackflag, fin = self.parse_flags(flags)
 
-        if self.seq != ack or ackflag == 0:
-            self.stop_and_wait_sender(data)
+            if self.seq == ack or ackflag != 0:
+                break
 
         self.seq += 1
 
-    def stop_and_wait_receiver(self, data):
-        ret = self.socket.recv(1024)
+    def stop_and_wait_receiver(self):
+        ret = self.socket.recv(2048)
+        print(ret)
 
         if ret is not None:
-            self.socket.send(
-                self.create_packet(0, seq, 4, 0, 0, '')
+            self.socket.sendto(
+                self.create_packet(0, self.seq, 4, 0, b''), self.client
             )
         msg = ret[12:]
         header = ret[:12]
 
-        seq, ack, flags, win = self.parse_header[header]
+        seq, ack, flags, win = self.parse_header(header)
 
         if (self.seq == seq):
+            print(msg)
             self.seq += 1
             return msg
 
-        if self.parse_flags(flags)[2] == 1:
+        if self.parse_flags(flags)[2] != 0:
             self.socket.close()
+            return 'fin'
