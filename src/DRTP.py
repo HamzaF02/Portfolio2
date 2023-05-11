@@ -35,7 +35,7 @@ class DRTP:
 
         start_time = time.time()
         self.socket.sendto(sync, (self.ip, self.port))
-        ret = self.socket.recv(2048)
+        ret = self.socket.recv(1472)
         end_time = time.time()
 
         if ret is None:
@@ -66,7 +66,7 @@ class DRTP:
         except:
             sys.exit()
 
-        sync, self.client = self.socket.recvfrom(2048)
+        sync, self.client = self.socket.recvfrom(1472)
         header = sync[:12]
 
         seq, ack, flags, win = self.parse_header(header)
@@ -80,7 +80,7 @@ class DRTP:
         sync = self.create_packet(self.seq, 0, 12, 0, b'')
 
         self.socket.sendto(sync, self.client)
-        ret = self.socket.recv(1024)
+        ret = self.socket.recv(1472)
 
         header = ret[:12]
 
@@ -100,7 +100,7 @@ class DRTP:
 
             self.socket.sendto(fin, (self.ip, self.port))
 
-            ret = self.socket.recv(2048)
+            ret = self.socket.recv(1472)
 
             if ret is None:
                 continue
@@ -119,7 +119,7 @@ class DRTP:
         self.socket.sendto(self.create_packet(
             self.seq, 0, 0, 0, data), (self.ip, self.port))
         while True:
-            ret = self.socket.recv(2048)
+            ret = self.socket.recv(1472)
 
             ############# RESET TIMER!!! ##############
 
@@ -137,8 +137,8 @@ class DRTP:
         self.seq += 1
 
     def stop_and_wait_receiver(self):
-        ret = self.socket.recv(2048)
-        print(ret)
+        ret = self.socket.recv(1472)
+        # print(ret)
 
         if ret is not None:
             self.socket.sendto(
@@ -148,12 +148,13 @@ class DRTP:
         header = ret[:12]
 
         seq, ack, flags, win = self.parse_header(header)
+        syn, ackflag, fin = self.parse_flags(flags)
 
-        if (self.seq == seq):
-            print(msg)
-            self.seq += 1
-            return msg
-
-        if self.parse_flags(flags)[2] != 0:
+        if fin != 0:
             self.socket.close()
             return 'fin'
+
+        elif (self.seq == seq):
+            # print(msg)
+            self.seq += 1
+            return msg[12:]
