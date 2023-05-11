@@ -179,4 +179,4 @@ class DRTP:
             return 'fin'
         elif (self.seq == seq):
             self.seq += 1
-            return msg[12:]
+            return msg

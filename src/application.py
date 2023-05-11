@@ -3,6 +3,8 @@ import _thread as thread
 import sys
 import argparse
 
+from DRTP import DRTP
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-s', '--server', action='store_true',
@@ -25,56 +27,43 @@ args = parser.parse_args()
 
 
 def client():
-    clientSocket = socket(AF_INET, SOCK_DGRAM)
-    port = args.port
-    ip = args.ip
+    clientSocket = DRTP(args.ip, args.port)
 
-    try:
-        clientSocket.connect((ip, port))
-    except:
-        print("Failed to connect")
-        sys.exit()
+    clientSocket.connect()
 
     name = args.filename
-    clientSocket.send(name.encode())
+    print(name)
+    clientSocket.stop_and_wait_sender(name.encode())
 
     f = open(name, "rb")
 
-    packet = f.read(1024)
+    packet = f.read(1460)
     while packet:
-        clientSocket.send(packet)
-        packet = f.read(1024)
-
-    clientSocket.send("end".encode())
-
+        print(packet)
+        clientSocket.stop_and_wait_sender(packet)
+        packet = f.read(1460)
     clientSocket.close()
 
 
 def server():
-    serverSocket = socket(AF_INET, SOCK_DGRAM)
-    port = args.port
-    ip = args.ip
+    serverSocket = DRTP(args.ip, args.port)
 
-    try:
-        serverSocket.bind((ip, port))
-    except:
-        print("ERROR: Binding failed")
-        sys.exit()
+    serverSocket.bind()
 
-    startInfo = serverSocket.recv(1024)
+    startInfo = serverSocket.stop_and_wait_receiver()
+    # print(startInfo)
 
     meld = b''
 
-    g = open("new_"+startInfo.decode(), "wb")
+    g = open("new.jpg", "wb")
     while True:
-        m = serverSocket.recv(1024)
-        if m == b'end':
+        m = serverSocket.stop_and_wait_receiver()
+
+        if m == 'fin':
             break
         meld += m
-
+    print(meld)
     g.write(meld)
-
-    serverSocket.close()
 
 
 if args.client:
