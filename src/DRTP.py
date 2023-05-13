@@ -155,6 +155,7 @@ class DRTP:
 
             seq, ack, flags, win = self.parse_header(header)
             syn, ackflag, fin = self.parse_flags(flags)
+            # print(ack)
 
             if self.seq == ack or ackflag != 0:
                 break
@@ -185,7 +186,7 @@ class DRTP:
             return 'fin'
         elif (self.seq == seq):
             self.seq += 1
-            return msg[12:]
+            return msg
 
     def GBN(self):
         winn = 5
@@ -206,7 +207,6 @@ class DRTP:
                     window[i], 0, 0, 0, data[window[i]])
 
                 self.socket.send(p)
-                # print(window[i])
 
             while len(window) > 0:
                 try:
@@ -216,12 +216,11 @@ class DRTP:
                     break
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
-                # print(ack)
 
                 if (ack > window[0]):
                     break
                 else:
-                    print(window.pop(0))
+                    window.pop(0)
 
                     if len(data) <= self.seq:
                         continue
@@ -239,7 +238,6 @@ class DRTP:
     def GBN_R(self):
         file = b''
         done = True
-        test = True
         while True:
 
             while True:
@@ -250,20 +248,15 @@ class DRTP:
 
                 break
 
-            if test:
-                test = False
-                continue
-
             msg = ret[12:]
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
-            print(seq)
+
             syn, ackflag, fin = self.parse_flags(flags)
 
             if fin != 0:
                 self.socket.sendto(
                     self.create_packet(0, seq, 4, 0, b''), self.client)
-                print("fin")
                 self.socket.close()
                 break
 
