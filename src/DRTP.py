@@ -191,36 +191,40 @@ class DRTP:
         winn = 5
         window = []
         data = [b'', b'', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+        while len(window) < winn:
+            if len(data) <= self.seq:
+                break
+
+            window.append(self.seq)
+
+            self.seq += 1
 
         while True:
 
-            while len(window) < winn:
-                if len(data) <= self.seq:
-                    break
+            for i in range(len(window)):
                 p = self.create_packet(
-                    self.seq, 0, 0, 0, data[self.seq])
+                    window[i], 0, 0, 0, data[window[i]])
 
                 self.socket.send(p)
+                # print(window[i])
 
-                window.append(self.seq)
-
-                self.seq += 1
-
-            while True:
+            while len(window) > 0:
                 try:
                     ret = self.socket.recv(1472)
+
                 except:
                     break
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
-                print(ack)
+                # print(ack)
 
                 if (ack > window[0]):
                     break
                 else:
-                    window.pop(0)
+                    print(window.pop(0))
+
                     if len(data) <= self.seq:
-                        break
+                        continue
 
                     p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
 
@@ -235,6 +239,7 @@ class DRTP:
     def GBN_R(self):
         file = b''
         done = True
+        test = True
         while True:
 
             while True:
@@ -244,6 +249,10 @@ class DRTP:
                     continue
 
                 break
+
+            if test:
+                test = False
+                continue
 
             msg = ret[12:]
             header = ret[:12]
