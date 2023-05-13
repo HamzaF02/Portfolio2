@@ -121,9 +121,14 @@ class DRTP:
         while True:
             fin = self.create_packet(self.seq, 0, 2, 0, b'')
 
-            self.socket.send(fin)
+            try:
+                self.socket.send(fin)
+            except:
+                break
+
             try:
                 ret = self.socket.recv(1472)
+
             except:
                 continue
 
@@ -132,7 +137,7 @@ class DRTP:
             seq, ack, flags, win = self.parse_header(header)
             syn, ackflag, fin = self.parse_flags(flags)
 
-            if self.seq == ack or ackflag != 0:
+            if self.seq == ack and ackflag != 0:
                 break
 
         self.socket.close()
@@ -157,6 +162,7 @@ class DRTP:
         self.seq += 1
 
     def stop_and_wait_receiver(self):
+
         while True:
             try:
                 ret = self.socket.recv(1472)
@@ -179,4 +185,83 @@ class DRTP:
             return 'fin'
         elif (self.seq == seq):
             self.seq += 1
-            return msg
+            return msg[12:]
+
+    def GBN(self):
+        winn = 5
+        window = []
+        data = [b'', b'', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+
+        while True:
+
+            while len(window) < winn:
+                if len(data) <= self.seq:
+                    break
+                p = self.create_packet(
+                    self.seq, 0, 0, 0, data[self.seq])
+
+                self.socket.send(p)
+
+                window.append(self.seq)
+
+                self.seq += 1
+
+            while True:
+                try:
+                    ret = self.socket.recv(1472)
+                except:
+                    break
+
+                seq, ack, flags, win = self.parse_header(ret[:12])
+                print(ack)
+
+                if (ack > window[0]):
+                    break
+                else:
+                    window.pop(0)
+                    if len(data) <= self.seq:
+                        break
+
+                    p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+
+                    self.socket.send(p)
+
+                    window.append(self.seq)
+                    self.seq += 1
+
+            if len(data) <= self.seq and len(window) == 0:
+                break
+
+    def GBN_R(self):
+        file = b''
+        done = True
+        while True:
+
+            while True:
+                try:
+                    ret = self.socket.recv(1472)
+                except:
+                    continue
+
+                break
+
+            msg = ret[12:]
+            header = ret[:12]
+            seq, ack, flags, win = self.parse_header(header)
+            print(seq)
+            syn, ackflag, fin = self.parse_flags(flags)
+
+            if fin != 0:
+                self.socket.sendto(
+                    self.create_packet(0, seq, 4, 0, b''), self.client)
+                print("fin")
+                self.socket.close()
+                break
+
+            elif (self.seq == seq):
+                self.socket.sendto(
+                    self.create_packet(0, seq, 4, 0, b''), self.client)
+                self.seq += 1
+                file += msg
+
+        return file
