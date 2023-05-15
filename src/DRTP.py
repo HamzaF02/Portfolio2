@@ -188,10 +188,10 @@ class DRTP:
             self.seq += 1
             return msg
 
-    def GBN(self):
+    def GBN(self, data):
         winn = 5
         window = []
-        data = [b'', b'', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+
         while len(window) < winn:
             if len(data) <= self.seq:
                 break
@@ -202,7 +202,7 @@ class DRTP:
 
         while True:
 
-            for i in range(len(window)):
+            for i in range(0, len(window)):
                 p = self.create_packet(
                     window[i], 0, 0, 0, data[window[i]])
 
@@ -249,6 +249,7 @@ class DRTP:
                 break
 
             msg = ret[12:]
+
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
 
@@ -265,5 +266,110 @@ class DRTP:
                     self.create_packet(0, seq, 4, 0, b''), self.client)
                 self.seq += 1
                 file += msg
+
+        return file
+
+    def SR(self):
+        winn = 5
+        window = []
+        data = [b'', b'', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+
+        while True:
+
+            while len(window) < winn:
+                if len(data) <= self.seq:
+                    break
+                p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+
+                self.socket.send(p)
+                window.append(self.seq)
+
+                self.seq += 1
+
+            while len(window) > 0:
+                try:
+                    ret = self.socket.recv(1472)
+
+                except:
+                    break
+
+                seq, ack, flags, win = self.parse_header(ret[:12])
+
+                if (ack == window[0]):
+                    window.pop(0)
+
+                    if len(data) <= self.seq:
+                        continue
+
+                    p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+
+                    self.socket.send(p)
+
+                    window.append(self.seq)
+                    self.seq += 1
+
+                else:
+                    index = window.index(seq)
+                    buffer = window[0:index]
+
+                    if len(window) < index+1:
+                        window = []
+                    else:
+                        window = window[index+1:]
+
+                    while len(buffer) > 0:
+                        for i in range(len(buffer)):
+                            p = self.create_packet(
+                                buffer[i], 0, 0, 0, data[buffer[i]])
+
+                            self.socket.send(p)
+
+                        while True:
+                            try:
+                                ret = self.socket.recv(1472)
+                            except:
+                                break
+
+                            seq, ack, flags, win = self.parse_header(ret[:12])
+
+                            try:
+                                buffer.remove(seq)
+                            except:
+                                if window.count(seq) > 0:
+                                    window.remove(seq)
+
+            if len(data) <= self.seq and len(window) == 0:
+                break
+
+    def SR_R(self):
+        file = b''
+        winn = 5
+        window = []
+        while True:
+
+            while True:
+                try:
+                    ret = self.socket.recv(1472)
+                except:
+                    continue
+
+                break
+
+            msg = ret[12:]
+            header = ret[:12]
+            seq, ack, flags, win = self.parse_header(header)
+            self.socket.sendto(
+                self.create_packet(0, seq, 4, 0, b''), self.client)
+
+            syn, ackflag, fin = self.parse_flags(flags)
+
+            if fin != 0:
+                self.socket.close()
+                break
+
+            if seq == self.seq and len(window) == 0:
+                file += msg
+                self.seq += 1
+            # elif seq == self.seq:
 
         return file

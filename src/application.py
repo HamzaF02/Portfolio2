@@ -38,31 +38,54 @@ def client():
     f = open(name, "rb")
 
     packet = f.read(1460)
-    while packet:
-        print(packet)
-        clientSocket.stop_and_wait_sender(packet)
-        packet = f.read(1460)
+    stop = False
+    gbn = True
+    if stop:
+        while packet:
+            clientSocket.stop_and_wait_sender(packet)
+            packet = f.read(1460)
+    if gbn:
+        data = [b'', b'', b'']
+
+        while packet:
+            data.append(packet)
+            packet = f.read(1460)
+        clientSocket.GBN(data)
+
     clientSocket.close()
+
+    # f = open(name, "rb")
+    # f.read(1460)
+    # print(f.read(1460))
 
 
 def server():
     serverSocket = DRTP(args.ip, args.port)
 
     serverSocket.bind()
+    stop = False
+    gbn = True
 
     startInfo = serverSocket.stop_and_wait_receiver()
-    # print(startInfo)
-
-    meld = b''
-
     g = open("new.jpg", "wb")
-    while True:
-        m = serverSocket.stop_and_wait_receiver()
 
-        if m == 'fin':
-            break
-        meld += m
-    print(meld)
+    stop = False
+    gbn = True
+    if stop:
+
+        meld = b''
+
+        while True:
+            m = serverSocket.stop_and_wait_receiver()
+
+            if m == 'fin':
+                break
+            meld += m
+
+    if gbn:
+        meld = serverSocket.GBN_R()
+
+    # print(meld)
     g.write(meld)
 
 
