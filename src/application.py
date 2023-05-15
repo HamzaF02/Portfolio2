@@ -40,6 +40,11 @@ def client():
     packet = f.read(1460)
     stop = False
     gbn = True
+
+    if args.reliablemethod == 'gbn':
+        gbn = True
+    if args.reliablemethod == 'stop':
+        stop = True
     if stop:
         while packet:
             clientSocket.stop_and_wait_sender(packet)
@@ -69,10 +74,11 @@ def server():
     startInfo = serverSocket.stop_and_wait_receiver()
     g = open("new.jpg", "wb")
 
-    stop = False
-    gbn = True
+    if args.reliablemethod == 'gbn':
+        gbn = True
+    if args.reliablemethod == 'stop':
+        stop = True
     if stop:
-
         meld = b''
 
         while True:
