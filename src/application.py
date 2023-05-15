@@ -32,7 +32,6 @@ def client():
     clientSocket.connect()
 
     name = args.filename
-    print(name)
     clientSocket.stop_and_wait_sender(name.encode())
 
     f = open(name, "rb")
@@ -84,7 +83,6 @@ def server():
     elif args.reliablemethod == 'sr':
         meld = serverSocket.GBN_R()
 
-    # print(meld)
     g.write(meld)
 
 
