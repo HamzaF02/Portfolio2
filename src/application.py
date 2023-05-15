@@ -53,12 +53,12 @@ def client():
 
     start_time = time.time()
     if args.reliablemethod == 'stop':
-        throughput = clientSocket.stop_and_wait_sender(data)
+        clientSocket.stop_and_wait_sender(data)
 
     elif args.reliablemethod == 'gbn':
-        throughput = clientSocket.GBN(data)
+        clientSocket.GBN(data)
     elif args.reliablemethod == 'sr':
-        throughput = clientSocket.SR(data)
+        clientSocket.SR(data)
 
     clientSocket.close()
     end_time = time.time()

@@ -13,7 +13,6 @@ class DRTP:
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.timeout = 0.5
         self.testcase = test
-        self.througput = 0
 
     def create_packet(self, seq, ack, flags, win, data):
         header = pack(self.header_format, seq, ack, flags, win)
@@ -152,7 +151,6 @@ class DRTP:
                 else:
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[i])
-                    self.througput += len(p)
 
                     self.socket.send(p)
 
@@ -170,7 +168,6 @@ class DRTP:
                     break
 
             self.seq += 1
-        return self.througput
 
     def stop_and_wait_receiver(self):
         file = b''
@@ -230,7 +227,6 @@ class DRTP:
             for i in range(0, len(window)):
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
-                self.througput += len(p)
 
                 if test == True:
                     test = False
@@ -256,7 +252,6 @@ class DRTP:
 
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
-                    self.througput += len(p)
 
                     self.socket.send(p)
 
@@ -265,7 +260,6 @@ class DRTP:
 
             if len(data) <= self.seq and len(window) == 0:
                 break
-        return self.througput
 
     def GBN_R(self):
         file = b''
@@ -329,8 +323,6 @@ class DRTP:
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
 
-                self.througput += len(p)
-
                 if test:
                     test = False
                 else:
@@ -352,7 +344,6 @@ class DRTP:
 
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
-                    self.througput += len(p)
 
                     self.socket.send(p)
 
@@ -393,7 +384,6 @@ class DRTP:
 
             if len(data) <= self.seq and len(window) == 0:
                 break
-        return self.througput
 
     def SR_R(self):
         file = b''
