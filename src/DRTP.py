@@ -330,7 +330,6 @@ class DRTP:
                     continue
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
-                print(ack)
 
                 if (ack == window[0]):
                     window.pop(0)
@@ -371,7 +370,6 @@ class DRTP:
                                 break
 
                             seq, ack, flags, win = self.parse_header(ret[:12])
-                            print(ack)
 
                             try:
                                 buffer.remove(ack)
@@ -403,7 +401,6 @@ class DRTP:
             msg = ret[12:]
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
-            print(seq)
             if test:
                 test = False
                 continue
