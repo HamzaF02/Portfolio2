@@ -407,66 +407,85 @@ class DRTP:
         return file
 
     def SR(self, data):
+
+        # Windows for sliding windows, can only send so much before waiting for acknowledgment
         window = []
+        # Starts with three empty variables to make til line up with sequence
+        # (Could be done with loop for switching between modes)
         data = [b'', b'', b'']+data
 
+        # Loss test
         test = False
-
         if self.testcase == "loss":
             test = True
 
         while True:
 
+            # If window is not full, it fills it untill there are no more packets/sequence numbers
             while len(window) < self.win:
                 if len(data) <= self.seq:
                     break
                 window.append(self.seq)
-
                 self.seq += 1
 
+            # Then procceeds to send every packet in window, ignores the first if test asks for it
             for i in range(len(window)):
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
-
                 if test:
                     test = False
                 else:
                     self.socket.send(p)
 
+            # While there are values in window
             while len(window) > 0:
+                # Tries to receive acknolegdements, if not it will send everthing in the window again
                 try:
                     ret = self.socket.recv(1472)
-                except:
+
+                except timeout:
                     break
 
-                seq, ack, flags, win = self.parse_header(ret[:12])
+                # Gets header from packet and parses it into usable information
+                header = ret[:12]
+                seq, ack, flags, win = self.parse_header(header)
 
+                # If correct ack is received
                 if (ack == window[0]):
+                    # pops out the first
                     window.pop(0)
 
+                    # If no more packets are present it leaves it
                     if len(data) <= self.seq:
                         continue
 
+                    # Creates and sends packet
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
-
                     self.socket.send(p)
 
+                    # Adds sequence number to window and increases the number
                     window.append(self.seq)
                     self.seq += 1
 
-                else:
+                # If its the wrong ack packet
+                elif ack > window[0]:
 
+                    # Gets posisition of packet that ack was meant for
                     index = window.index(ack)
 
+                    # The packets that needs to resent
                     buffer = window[0:index]
 
+                    # makes the rest of window
                     if len(window) < index+1:
                         window = []
                     else:
                         window = window[index+1:]
 
+                    # A kind of stop and wait will occur untill buffer list has been emptied
                     while len(buffer) > 0:
+                        # Resends the packets
                         for i in range(len(buffer)):
                             p = self.create_packet(
                                 buffer[i], 0, 0, self.win, data[buffer[i]])
@@ -474,16 +493,21 @@ class DRTP:
                             self.socket.send(p)
 
                         while True:
+                            # Tries to receives packets, if it wont arrive we resend buffer packets
                             try:
                                 ret = self.socket.recv(1472)
-                            except:
+                            except timeout:
                                 break
 
-                            seq, ack, flags, win = self.parse_header(ret[:12])
+                            # Gets header from packet and parses it into usable information
+                            header = ret[:12]
+                            seq, ack, flags, win = self.parse_header(header)
 
+                            # If ack is for a packet in buffer, it removes it
                             try:
                                 buffer.remove(ack)
                             except:
+                                # if it is a packet in window, it removes it
                                 if window.count(ack) > 0:
                                     window.remove(ack)
 
@@ -492,52 +516,70 @@ class DRTP:
                 break
 
     def SR_R(self):
-        file = b''
+        # Lists for reordering and storage of buffered packets
         window = []
         windowseq = []
-        test = False
 
+        # Storage of the information to be returned
+        file = b''
+
+        # A test to test what skipping and ack does, and if server sends dup
+        test = False
         if self.testcase == "skip_ack":
             test = True
 
         while True:
 
+            # Waits for a message to receive
             while True:
                 try:
                     ret = self.socket.recv(1472)
-                except:
+                except timeout:
                     continue
-
                 break
-
-            msg = ret[12:]
-            header = ret[:12]
-            seq, ack, flags, win = self.parse_header(header)
 
             if test:
                 test = False
                 continue
 
+            # Gets the information sendt by client
+            msg = ret[12:]
+
+            # Gets header from packet and parses it into usable information
+            header = ret[:12]
+            seq, ack, flags, win = self.parse_header(header)
+            syn, ackflag, fin = self.parse_flags(flags)
+
+            if test:
+                test = False
+                continue
+
+            # Sends and ack packet to client no matter what packet it received
             self.socket.sendto(
                 self.create_packet(0, seq, 4, self.win, b''), self.client)
 
-            syn, ackflag, fin = self.parse_flags(flags)
-
+            # If it is the fin packet, it closes the packet and return file
             if fin != 0:
                 self.socket.close()
                 break
 
+            # If the correct packet arrives, it handles it like noramlly
             if seq == self.seq:
                 file += msg
                 self.seq += 1
+
+            # If it is the wrong packet, it will be added to window in the correct posistion
             elif seq > self.seq:
 
+                # Adding sequence to seqlist, and then using sorting and indexing to find the correct posistion for packet
                 windowseq.append(seq)
                 windowseq.sort()
                 i = windowseq.index(seq)
 
+                # Placing information into the list for later use
                 window = window[0:i]+[msg]+window[i:]
 
+            # Goes through the lists to see if time to leave buffer by matching it to servers sequence counter
             while len(windowseq) > 0:
                 if windowseq[0] != self.seq:
                     break
