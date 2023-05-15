@@ -6,6 +6,8 @@ import time
 
 from DRTP import DRTP
 
+# This is the file transfer application
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('-s', '--server', action='store_true',
@@ -19,9 +21,9 @@ parser.add_argument('-p', '--port', type=int, default=8088,
 parser.add_argument('-f', '--filename', type=str,
                     help='The file to transfer')
 parser.add_argument('-r', '--reliablemethod', type=str,
-                    help='Starts the reliable method chosen')
+                    help='Starts the reliable method chosen', choices=['stop', 'gbn', 'sr'])
 parser.add_argument('-t', '--testcase', type=str,
-                    help='Starts the test case chosen')
+                    help='Starts the test case chosen', choices=['loss', 'skip_ack'])
 
 
 args = parser.parse_args()
