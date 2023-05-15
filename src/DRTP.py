@@ -391,16 +391,18 @@ class DRTP:
             seq, ack, flags, win = self.parse_header(header)
             syn, ackflag, fin = self.parse_flags(flags)
 
-            # If it is a finish packet it sends oacket, closese the socket and returns the file
-            if fin != 0:
+            # Only send ack to duplicates or the correct packet
+            if seq <= self.seq:
                 self.socket.sendto(
                     self.create_packet(0, seq, 4, self.win, b''), self.client)
+
+            # If it is a finish packet it closes the socket and returns the file
+            if fin != 0:
+
                 self.socket.close()
                 break
-            # If it is the correct packet, it will send ack and add it file
+            # If it is the correct packet, and add it file
             elif (self.seq == seq):
-                self.socket.sendto(
-                    self.create_packet(0, seq, 4, self.win, b''), self.client)
                 self.seq += 1
                 file += msg
 
