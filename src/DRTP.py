@@ -31,7 +31,7 @@ class DRTP:
     def connect(self):
         self.socket.connect((self.ip, self.port))
 
-        sync = self.create_packet(self.seq, 0, 8, self.win, b'')
+        sync = self.create_packet(self.seq, 0, 8, 0, b'')
         self.socket.settimeout(0.5)
 
         self.socket.send(sync)
