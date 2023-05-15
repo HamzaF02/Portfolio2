@@ -248,13 +248,13 @@ class DRTP:
 
         while True:
 
-            waits for s
+            # waits for a message to receive
             while True:
                 try:
                     ret = self.socket.recv(1472)
                 except timeout:
                     continue
-                brea
+                break
 
             if test:
                 test = False
@@ -268,36 +268,48 @@ class DRTP:
             seq, ack, flags, win = self.parse_header(header)
             syn, ackflag, fin = self.parse_flags(flags)
 
+            # Sends a acknowledment packet
             self.socket.sendto(
                 self.create_packet(0, seq, 4, self.win, b''), self.client
             )
 
+            # If it is a finnish packet it closese the socket and returns the file
             if fin != 0:
                 self.socket.close()
                 break
+
+            # if its the correct sequence and not a duplicate, it will write it to file and increase its counter
             elif (self.seq == seq):
                 self.seq += 1
                 file += msg
 
         return file
 
+    # Go-Back-N is a reliable method of sending multiple packets without instantly waiting for acknowledgement
+    # It works by sending multiple packets and then waits for acknoledments from server before sending more
     def GBN(self, data):
+        # Windows for sliding windows, can only send so much before waiting for acknowledgment
         window = []
+        # Starts with three empty variables to make til line up with sequence
+        # (Could be done with loop for switching between modes)
         data = [b'', b'', b'']+data
+
+        # Loss test
         test = False
         if self.testcase == "loss":
             test = True
 
+        # Fills up window with sequences to send until there is either no more spots in window or no more packets
         while len(window) < self.win:
             if len(data) <= self.seq:
                 break
-
             window.append(self.seq)
-
             self.seq += 1
 
+        # Will send and receive in correct order until there is no more data
         while True:
 
+            # Creates and sends every packet in window, misses one incase of loss test
             for i in range(0, len(window)):
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
@@ -307,66 +319,85 @@ class DRTP:
                 else:
                     self.socket.send(p)
 
+            # As long as there are values in window it breaks this will continue
             while len(window) > 0:
+                # Tries to receive acknolegdements, if not it will send everthing in the window again
                 try:
                     ret = self.socket.recv(1472)
 
-                except:
+                except timeout:
                     break
 
-                seq, ack, flags, win = self.parse_header(ret[:12])
+                # Gets header from packet and parses it into usable information
+                header = ret[:12]
+                seq, ack, flags, win = self.parse_header(header)
 
+                # If the recieved ack packet is not for the first packet, it will send everthing in window again
                 if (ack > window[0]):
                     break
                 else:
+                    # if correct ack packets arrives, it pops it out of window and adds the next one in the list
                     window.pop(0)
 
                     if len(data) <= self.seq:
                         continue
 
+                    # Creates and sends the next packet
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
-
                     self.socket.send(p)
 
+                    # Adds it to the window list
                     window.append(self.seq)
+
+                    # seqeunce increased, packet succecfully obtained
                     self.seq += 1
 
+            # if the procces is complete, close loop
             if len(data) <= self.seq and len(window) == 0:
                 break
 
+    # Go-Back-N is a reliable method of sending multiple packets without instantly waiting for acknowledgement
+    # Server side works by receiving packets in order and ignoring anything else
     def GBN_R(self):
+
+        # Storage of the information to be returned
         file = b''
-        done = True
+
+        # A test to test what skipping and ack does, and if server sends dup
         test = False
         if self.testcase == "skip_ack":
             test = True
 
         while True:
 
+            # Waits for a message to receive
             while True:
                 try:
                     ret = self.socket.recv(1472)
-                except:
+                except timeout:
                     continue
-
                 break
 
-            msg = ret[12:]
-
-            header = ret[:12]
-            seq, ack, flags, win = self.parse_header(header)
-            syn, ackflag, fin = self.parse_flags(flags)
             if test:
                 test = False
                 continue
 
+            # Gets the information sendt by client
+            msg = ret[12:]
+
+            # Gets header from packet and parses it into usable information
+            header = ret[:12]
+            seq, ack, flags, win = self.parse_header(header)
+            syn, ackflag, fin = self.parse_flags(flags)
+
+            # If it is a finish packet it sends oacket, closese the socket and returns the file
             if fin != 0:
                 self.socket.sendto(
                     self.create_packet(0, seq, 4, self.win, b''), self.client)
                 self.socket.close()
                 break
-
+            # If it is the correct packet, it will send ack and add it file
             elif (self.seq == seq):
                 self.socket.sendto(
                     self.create_packet(0, seq, 4, self.win, b''), self.client)
@@ -456,6 +487,7 @@ class DRTP:
                                 if window.count(ack) > 0:
                                     window.remove(ack)
 
+            # if the procces is complete, close loop
             if len(data) <= self.seq and len(window) == 0:
                 break
 
