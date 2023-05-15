@@ -186,11 +186,10 @@ class DRTP:
             return msg
 
     def GBN(self, data):
-        winn = 5
         window = []
         data = [b'', b'', b'']+data
 
-        while len(window) < winn:
+        while len(window) < self.win:
             if len(data) <= self.seq:
                 break
 
@@ -269,13 +268,12 @@ class DRTP:
         return file
 
     def SR(self, data):
-        winn = 5
         window = []
         data = [b'', b'', b'']+data
 
         while True:
 
-            while len(window) < winn:
+            while len(window) < self.win:
                 if len(data) <= self.seq:
                     break
                 p = self.create_packet(
