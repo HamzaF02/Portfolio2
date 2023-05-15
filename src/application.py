@@ -39,29 +39,24 @@ def client():
 
     packet = f.read(1460)
     stop = False
-    gbn = True
+    gbn = False
+    sr = True
+    data = []
 
-    if args.reliablemethod == 'gbn':
-        gbn = True
+    while packet:
+        data.append(packet)
+        packet = f.read(1460)
+
     if args.reliablemethod == 'stop':
-        stop = True
-    if stop:
-        while packet:
-            clientSocket.stop_and_wait_sender(packet)
-            packet = f.read(1460)
-    if gbn:
-        data = [b'', b'', b'']
+        for i in range(len(data)):
+            clientSocket.stop_and_wait_sender(data[i])
 
-        while packet:
-            data.append(packet)
-            packet = f.read(1460)
+    elif args.reliablemethod == 'gbn':
         clientSocket.GBN(data)
+    elif args.reliablemethod == 'sr':
+        clientSocket.SR(data)
 
     clientSocket.close()
-
-    # f = open(name, "rb")
-    # f.read(1460)
-    # print(f.read(1460))
 
 
 def server():
@@ -69,18 +64,14 @@ def server():
 
     serverSocket.bind()
     stop = False
-    gbn = True
+    gbn = False
+    sr = True
 
     startInfo = serverSocket.stop_and_wait_receiver()
     g = open("new.jpg", "wb")
+    meld = b''
 
-    if args.reliablemethod == 'gbn':
-        gbn = True
     if args.reliablemethod == 'stop':
-        stop = True
-    if stop:
-        meld = b''
-
         while True:
             m = serverSocket.stop_and_wait_receiver()
 
@@ -88,7 +79,9 @@ def server():
                 break
             meld += m
 
-    if gbn:
+    elif args.reliablemethod == 'gbn':
+        meld = serverSocket.GBN_R()
+    elif args.reliablemethod == 'sr':
         meld = serverSocket.GBN_R()
 
     # print(meld)

@@ -31,10 +31,9 @@ class DRTP:
     def connect(self):
         self.socket.connect((self.ip, self.port))
 
-        sync = self.create_packet(self.seq, 0, 8, 0, b'')
+        sync = self.create_packet(self.seq, 0, 8, self.win, b'')
         self.socket.settimeout(0.5)
 
-        # start_time = time.time()
         self.socket.send(sync)
         try:
             ret = self.socket.recv(1472)
@@ -42,8 +41,6 @@ class DRTP:
             print("ERROR. Synchronize failed")
             self.socket.close()
             sys.exit()
-
-        # end_time = time.time()
 
         header = ret[:12]
 
@@ -53,14 +50,12 @@ class DRTP:
             print("ERROR. Synchronize failed")
             self.socket.close()
             sys.exit()
-        end_time = time.time()
 
-        # self.timeout = int((end_time-start_time)*4)
-        # self.socket.settimeout(self.timeout)
+        self.win = win
         try:
 
             self.socket.send(self.create_packet(
-                0, 1, 4, 0, b''))
+                0, seq, 4, self.win, b''))
         except:
             print("ERROR. Synchronize failed")
             self.socket.close()
@@ -76,6 +71,7 @@ class DRTP:
 
         sync, self.client = self.socket.recvfrom(1472)
         self.socket.settimeout(0.5)
+        self.win = 5
 
         header = sync[:12]
 
@@ -87,7 +83,7 @@ class DRTP:
             self.socket.close()
             sys.exit()
 
-        sync = self.create_packet(self.seq, 0, 12, 0, b'')
+        sync = self.create_packet(self.seq, 0, 12, self.win, b'')
 
         try:
             self.socket.sendto(sync, self.client)
@@ -119,7 +115,7 @@ class DRTP:
     def close(self):
 
         while True:
-            fin = self.create_packet(self.seq, 0, 2, 0, b'')
+            fin = self.create_packet(self.seq, 0, 2, self.win, b'')
 
             try:
                 self.socket.send(fin)
@@ -145,7 +141,8 @@ class DRTP:
     def stop_and_wait_sender(self, data):
 
         while True:
-            self.socket.send(self.create_packet(self.seq, 0, 0, 0, data))
+            self.socket.send(self.create_packet(
+                self.seq, 0, 0, self.win, data))
             try:
                 ret = self.socket.recv(1472)
             except:
@@ -178,7 +175,7 @@ class DRTP:
         syn, ackflag, fin = self.parse_flags(flags)
 
         self.socket.sendto(
-            self.create_packet(0, seq, 4, 0, b''), self.client
+            self.create_packet(0, seq, 4, self.win, b''), self.client
         )
 
         if fin != 0:
@@ -191,6 +188,7 @@ class DRTP:
     def GBN(self, data):
         winn = 5
         window = []
+        data = [b'', b'', b'']+data
 
         while len(window) < winn:
             if len(data) <= self.seq:
@@ -204,7 +202,7 @@ class DRTP:
 
             for i in range(0, len(window)):
                 p = self.create_packet(
-                    window[i], 0, 0, 0, data[window[i]])
+                    window[i], 0, 0, self.win, data[window[i]])
 
                 self.socket.send(p)
 
@@ -225,7 +223,8 @@ class DRTP:
                     if len(data) <= self.seq:
                         continue
 
-                    p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+                    p = self.create_packet(
+                        self.seq, 0, 0, self.win, data[self.seq])
 
                     self.socket.send(p)
 
@@ -257,29 +256,30 @@ class DRTP:
 
             if fin != 0:
                 self.socket.sendto(
-                    self.create_packet(0, seq, 4, 0, b''), self.client)
+                    self.create_packet(0, seq, 4, self.win, b''), self.client)
                 self.socket.close()
                 break
 
             elif (self.seq == seq):
                 self.socket.sendto(
-                    self.create_packet(0, seq, 4, 0, b''), self.client)
+                    self.create_packet(0, seq, 4, self.win, b''), self.client)
                 self.seq += 1
                 file += msg
 
         return file
 
-    def SR(self):
+    def SR(self, data):
         winn = 5
         window = []
-        data = [b'', b'', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+        data = [b'', b'', b'']+data
 
         while True:
 
             while len(window) < winn:
                 if len(data) <= self.seq:
                     break
-                p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+                p = self.create_packet(
+                    self.seq, 0, 0, self.win, data[self.seq])
 
                 self.socket.send(p)
                 window.append(self.seq)
@@ -291,9 +291,10 @@ class DRTP:
                     ret = self.socket.recv(1472)
 
                 except:
-                    break
+                    continue
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
+                print(ack)
 
                 if (ack == window[0]):
                     window.pop(0)
@@ -301,7 +302,8 @@ class DRTP:
                     if len(data) <= self.seq:
                         continue
 
-                    p = self.create_packet(self.seq, 0, 0, 0, data[self.seq])
+                    p = self.create_packet(
+                        self.seq, 0, 0, self.win, data[self.seq])
 
                     self.socket.send(p)
 
@@ -309,7 +311,9 @@ class DRTP:
                     self.seq += 1
 
                 else:
-                    index = window.index(seq)
+
+                    index = window.index(ack)
+
                     buffer = window[0:index]
 
                     if len(window) < index+1:
@@ -320,7 +324,7 @@ class DRTP:
                     while len(buffer) > 0:
                         for i in range(len(buffer)):
                             p = self.create_packet(
-                                buffer[i], 0, 0, 0, data[buffer[i]])
+                                buffer[i], 0, 0, self.win, data[buffer[i]])
 
                             self.socket.send(p)
 
@@ -331,20 +335,21 @@ class DRTP:
                                 break
 
                             seq, ack, flags, win = self.parse_header(ret[:12])
+                            print(ack)
 
                             try:
-                                buffer.remove(seq)
+                                buffer.remove(ack)
                             except:
-                                if window.count(seq) > 0:
-                                    window.remove(seq)
+                                if window.count(ack) > 0:
+                                    window.remove(ack)
 
             if len(data) <= self.seq and len(window) == 0:
                 break
 
     def SR_R(self):
         file = b''
-        winn = 5
         window = []
+        windowseq = []
         while True:
 
             while True:
@@ -358,8 +363,9 @@ class DRTP:
             msg = ret[12:]
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
+
             self.socket.sendto(
-                self.create_packet(0, seq, 4, 0, b''), self.client)
+                self.create_packet(0, seq, 4, self.win, b''), self.client)
 
             syn, ackflag, fin = self.parse_flags(flags)
 
@@ -367,9 +373,22 @@ class DRTP:
                 self.socket.close()
                 break
 
-            if seq == self.seq and len(window) == 0:
+            if seq == self.seq:
                 file += msg
                 self.seq += 1
-            # elif seq == self.seq:
+            elif seq > self.seq:
+
+                windowseq.append(seq)
+                windowseq.sort()
+                i = windowseq.index(seq)
+
+                window = window[0:i]+[msg]+window[i:]
+
+            while len(windowseq) > 0:
+                if windowseq[0] != self.seq:
+                    break
+                file += window.pop(0)
+                windowseq.pop(0)
+                self.seq += 1
 
         return file
