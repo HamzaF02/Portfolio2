@@ -64,7 +64,7 @@ def client():
     end_time = time.time()
 
     throughput = 8*throughput/(end_time-start_time)
-    throughput = int(throughput/1_000_000)
+    throughput = throughput/1_000_000
 
     print("Throughput: ", throughput, "Mbps")
 
