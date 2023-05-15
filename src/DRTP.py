@@ -5,13 +5,14 @@ import time
 
 
 class DRTP:
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, test):
         self.ip = ip
         self.port = port
         self.header_format = '!IIHH'
         self.seq = 1
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.timeout = 0.5
+        self.testcase = test
 
     def create_packet(self, seq, ack, flags, win, data):
         header = pack(self.header_format, seq, ack, flags, win)
@@ -139,54 +140,76 @@ class DRTP:
         self.socket.close()
 
     def stop_and_wait_sender(self, data):
+        test = False
+        if self.testcase == "loss":
+            test = True
+        for i in range(len(data)):
+            while True:
+                if test:
+                    test = False
+                else:
+                    self.socket.send(self.create_packet(
+                        self.seq, 0, 0, self.win, data[i]))
+
+                try:
+                    ret = self.socket.recv(1472)
+                except:
+                    continue
+
+                header = ret[:12]
+
+                seq, ack, flags, win = self.parse_header(header)
+                syn, ackflag, fin = self.parse_flags(flags)
+
+                if self.seq == ack or ackflag != 0:
+                    break
+
+            self.seq += 1
+
+    def stop_and_wait_receiver(self):
+        file = b''
+        test = False
+        if self.testcase == "skip_ack":
+            test = True
 
         while True:
-            self.socket.send(self.create_packet(
-                self.seq, 0, 0, self.win, data))
-            try:
-                ret = self.socket.recv(1472)
-            except:
-                continue
 
+            while True:
+                try:
+                    ret = self.socket.recv(1472)
+                except:
+                    continue
+                break
+
+            msg = ret[12:]
             header = ret[:12]
 
             seq, ack, flags, win = self.parse_header(header)
             syn, ackflag, fin = self.parse_flags(flags)
 
-            if self.seq == ack or ackflag != 0:
-                break
-
-        self.seq += 1
-
-    def stop_and_wait_receiver(self):
-
-        while True:
-            try:
-                ret = self.socket.recv(1472)
-            except:
+            if test:
+                test = False
                 continue
-            break
 
-        msg = ret[12:]
-        header = ret[:12]
+            self.socket.sendto(
+                self.create_packet(0, seq, 4, self.win, b''), self.client
+            )
 
-        seq, ack, flags, win = self.parse_header(header)
-        syn, ackflag, fin = self.parse_flags(flags)
+            if fin != 0:
+                self.socket.close()
+                break
+            elif (self.seq == seq):
+                self.seq += 1
+                file += msg
 
-        self.socket.sendto(
-            self.create_packet(0, seq, 4, self.win, b''), self.client
-        )
-
-        if fin != 0:
-            self.socket.close()
-            return 'fin'
-        elif (self.seq == seq):
-            self.seq += 1
-            return msg
+        return file
 
     def GBN(self, data):
         window = []
         data = [b'', b'', b'']+data
+        test = False
+        if self.testcase == "loss":
+            test = True
 
         while len(window) < self.win:
             if len(data) <= self.seq:
@@ -202,7 +225,10 @@ class DRTP:
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
 
-                self.socket.send(p)
+                if test == True:
+                    test = False
+                else:
+                    self.socket.send(p)
 
             while len(window) > 0:
                 try:
@@ -235,6 +261,10 @@ class DRTP:
     def GBN_R(self):
         file = b''
         done = True
+        test = False
+        if self.testcase == "skip_ack":
+            test = True
+
         while True:
 
             while True:
@@ -249,8 +279,10 @@ class DRTP:
 
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
-
             syn, ackflag, fin = self.parse_flags(flags)
+            if test:
+                test = False
+                continue
 
             if fin != 0:
                 self.socket.sendto(
@@ -269,6 +301,9 @@ class DRTP:
     def SR(self, data):
         window = []
         data = [b'', b'', b'']+data
+        test = False
+        if self.testcase == "loss":
+            test = True
 
         while True:
 
@@ -278,7 +313,11 @@ class DRTP:
                 p = self.create_packet(
                     self.seq, 0, 0, self.win, data[self.seq])
 
-                self.socket.send(p)
+                if test:
+                    test = False
+                else:
+                    self.socket.send(p)
+
                 window.append(self.seq)
 
                 self.seq += 1
@@ -291,6 +330,7 @@ class DRTP:
                     continue
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
+                print(ack)
 
                 if (ack == window[0]):
                     window.pop(0)
@@ -331,6 +371,7 @@ class DRTP:
                                 break
 
                             seq, ack, flags, win = self.parse_header(ret[:12])
+                            print(ack)
 
                             try:
                                 buffer.remove(ack)
@@ -345,6 +386,10 @@ class DRTP:
         file = b''
         window = []
         windowseq = []
+        test = False
+        if self.testcase == "skip_ack":
+            test = True
+
         while True:
 
             while True:
@@ -358,6 +403,10 @@ class DRTP:
             msg = ret[12:]
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
+            print(seq)
+            if test:
+                test = False
+                continue
 
             self.socket.sendto(
                 self.create_packet(0, seq, 4, self.win, b''), self.client)

@@ -2,6 +2,7 @@ from socket import *
 import _thread as thread
 import sys
 import argparse
+import time
 
 from DRTP import DRTP
 
@@ -27,12 +28,12 @@ args = parser.parse_args()
 
 
 def client():
-    clientSocket = DRTP(args.ip, args.port)
+    clientSocket = DRTP(args.ip, args.port, args.testcase)
 
     clientSocket.connect()
 
     name = args.filename
-    clientSocket.stop_and_wait_sender(name.encode())
+    clientSocket.socket.send(name.encode())
 
     f = open(name, "rb")
 
@@ -41,14 +42,16 @@ def client():
     gbn = False
     sr = True
     data = []
+    throughput = len(packet)
 
     while packet:
         data.append(packet)
         packet = f.read(1460)
+        throughput += len(packet)
 
+    start_time = time.time()
     if args.reliablemethod == 'stop':
-        for i in range(len(data)):
-            clientSocket.stop_and_wait_sender(data[i])
+        clientSocket.stop_and_wait_sender(data)
 
     elif args.reliablemethod == 'gbn':
         clientSocket.GBN(data)
@@ -56,34 +59,35 @@ def client():
         clientSocket.SR(data)
 
     clientSocket.close()
+    end_time = time.time()
+
+    throughput = 8*throughput/(end_time-start_time)
+    throughput = int(throughput/1_000_000)
+
+    print("Throughput: ", throughput, "Mbps")
 
 
 def server():
-    serverSocket = DRTP(args.ip, args.port)
+    serverSocket = DRTP(args.ip, args.port, args.testcase)
 
     serverSocket.bind()
     stop = False
     gbn = False
     sr = True
+    file = b''
 
-    startInfo = serverSocket.stop_and_wait_receiver()
+    startInfo = serverSocket.socket.recv(1024)
     g = open("new"+startInfo.decode(), "wb")
-    meld = b''
 
     if args.reliablemethod == 'stop':
-        while True:
-            m = serverSocket.stop_and_wait_receiver()
-
-            if m == 'fin':
-                break
-            meld += m
+        file = serverSocket.stop_and_wait_receiver()
 
     elif args.reliablemethod == 'gbn':
-        meld = serverSocket.GBN_R()
+        file = serverSocket.GBN_R()
     elif args.reliablemethod == 'sr':
-        meld = serverSocket.GBN_R()
+        file = serverSocket.GBN_R()
 
-    g.write(meld)
+    g.write(file)
 
 
 if args.client:
