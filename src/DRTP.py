@@ -13,6 +13,7 @@ class DRTP:
         self.socket = socket(AF_INET, SOCK_DGRAM)
         self.timeout = 0.5
         self.testcase = test
+        self.througput = 0
 
     def create_packet(self, seq, ack, flags, win, data):
         header = pack(self.header_format, seq, ack, flags, win)
@@ -140,6 +141,7 @@ class DRTP:
         self.socket.close()
 
     def stop_and_wait_sender(self, data):
+
         test = False
         if self.testcase == "loss":
             test = True
@@ -148,8 +150,11 @@ class DRTP:
                 if test:
                     test = False
                 else:
-                    self.socket.send(self.create_packet(
-                        self.seq, 0, 0, self.win, data[i]))
+                    p = self.create_packet(
+                        self.seq, 0, 0, self.win, data[i])
+                    self.througput += len(p)
+
+                    self.socket.send(p)
 
                 try:
                     ret = self.socket.recv(1472)
@@ -165,6 +170,7 @@ class DRTP:
                     break
 
             self.seq += 1
+        return self.througput
 
     def stop_and_wait_receiver(self):
         file = b''
@@ -224,6 +230,7 @@ class DRTP:
             for i in range(0, len(window)):
                 p = self.create_packet(
                     window[i], 0, 0, self.win, data[window[i]])
+                self.througput += len(p)
 
                 if test == True:
                     test = False
@@ -249,6 +256,7 @@ class DRTP:
 
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
+                    self.througput += len(p)
 
                     self.socket.send(p)
 
@@ -257,6 +265,7 @@ class DRTP:
 
             if len(data) <= self.seq and len(window) == 0:
                 break
+        return self.througput
 
     def GBN_R(self):
         file = b''
@@ -301,7 +310,9 @@ class DRTP:
     def SR(self, data):
         window = []
         data = [b'', b'', b'']+data
+
         test = False
+
         if self.testcase == "loss":
             test = True
 
@@ -310,26 +321,29 @@ class DRTP:
             while len(window) < self.win:
                 if len(data) <= self.seq:
                     break
+                window.append(self.seq)
+
+                self.seq += 1
+
+            for i in range(len(window)):
                 p = self.create_packet(
-                    self.seq, 0, 0, self.win, data[self.seq])
+                    window[i], 0, 0, self.win, data[window[i]])
+
+                self.througput += len(p)
 
                 if test:
                     test = False
                 else:
                     self.socket.send(p)
 
-                window.append(self.seq)
-
-                self.seq += 1
-
             while len(window) > 0:
                 try:
                     ret = self.socket.recv(1472)
-
                 except:
-                    continue
+                    break
 
                 seq, ack, flags, win = self.parse_header(ret[:12])
+                print(ack)
 
                 if (ack == window[0]):
                     window.pop(0)
@@ -339,6 +353,7 @@ class DRTP:
 
                     p = self.create_packet(
                         self.seq, 0, 0, self.win, data[self.seq])
+                    self.througput += len(p)
 
                     self.socket.send(p)
 
@@ -370,6 +385,7 @@ class DRTP:
                                 break
 
                             seq, ack, flags, win = self.parse_header(ret[:12])
+                            print(ack)
 
                             try:
                                 buffer.remove(ack)
@@ -379,12 +395,14 @@ class DRTP:
 
             if len(data) <= self.seq and len(window) == 0:
                 break
+        return self.througput
 
     def SR_R(self):
         file = b''
         window = []
         windowseq = []
         test = False
+
         if self.testcase == "skip_ack":
             test = True
 
@@ -401,6 +419,8 @@ class DRTP:
             msg = ret[12:]
             header = ret[:12]
             seq, ack, flags, win = self.parse_header(header)
+            print(seq)
+
             if test:
                 test = False
                 continue

@@ -42,7 +42,7 @@ def client():
     gbn = False
     sr = True
     data = []
-    throughput = len(packet)
+    throughput = 0
 
     while packet:
         data.append(packet)
@@ -51,12 +51,12 @@ def client():
 
     start_time = time.time()
     if args.reliablemethod == 'stop':
-        clientSocket.stop_and_wait_sender(data)
+        throughput = clientSocket.stop_and_wait_sender(data)
 
     elif args.reliablemethod == 'gbn':
-        clientSocket.GBN(data)
+        throughput = clientSocket.GBN(data)
     elif args.reliablemethod == 'sr':
-        clientSocket.SR(data)
+        throughput = clientSocket.SR(data)
 
     clientSocket.close()
     end_time = time.time()
@@ -85,7 +85,7 @@ def server():
     elif args.reliablemethod == 'gbn':
         file = serverSocket.GBN_R()
     elif args.reliablemethod == 'sr':
-        file = serverSocket.GBN_R()
+        file = serverSocket.SR_R()
 
     g.write(file)
 
