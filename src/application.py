@@ -68,7 +68,7 @@ def server():
     sr = True
 
     startInfo = serverSocket.stop_and_wait_receiver()
-    g = open("new.jpg", "wb")
+    g = open("new"+startInfo.decode(), "wb")
     meld = b''
 
     if args.reliablemethod == 'stop':
